@@ -1,28 +1,41 @@
-from .oui import lookup_vendor
+# src/nha/classify.py
+from typing import List, Dict
 
-def classify_device(hostname: str, vendor: str, ports: list[str]) -> str:
-    h = (hostname or "").lower()
-    v = (vendor or "").lower()
+def classify_device(hostname: str, vendor: str, ports: List[str]) -> str:
+    """
+    Very light heuristic category classifier.
+    ports entries are strings like "80/tcp", "554/tcp", "9100/tcp".
+    """
+    hn = (hostname or "").lower()
+    ven = (vendor or "Unknown")
     ports = ports or []
-    if "iphone" in h or "ipad" in h or ("apple" in v and "62078/tcp" in ports):
-        return "phone/tablet"
-    if "android" in h or "samsung" in v:
-        return "phone/tablet"
-    if "raspberry" in h or "raspberry pi" in v:
-        return "embedded/linux"
-    if any(x in v for x in ["asus", "intel", "microsoft", "lenovo", "dell"]):
-        return "pc/laptop"
-    if any(x in h for x in ["roku","chromecast","shield","tv"]) or any(x in v for x in ["lg","google"]):
-        return "tv/streaming"
-    if any(x in v for x in ["tplink", "huawei", "xiaomi", "espressif"]):
-        return "iot"
-    if any(p.startswith("554/") for p in ports):
+
+    has = lambda pref: any(str(port).startswith(pref) for port in ports)
+
+    # Cameras tend to expose RTSP
+    if has("554/") or "cam" in hn or "camera" in hn:
         return "camera/iot"
-    if any(p.startswith(x) for x in ["80/","443/"]) and vendor == "Unknown":
-        return "unknown/web"
+
+    # Printers: 9100 RAW / 631 IPP
+    if has("9100/") or has("631/") or "printer" in hn:
+        return "printer/iot"
+
+    # Phones/tablets
+    if any(k in hn for k in ("iphone", "ipad", "android", "pixel")) or ven in ("Apple", "Samsung", "Google"):
+        return "phone/tablet"
+
+    # Desktops/laptops
+    if any(k in hn for k in ("pc", "laptop", "desktop", "workstation")) or ven in ("ASUSTek", "Dell", "HP", "Lenovo", "Acer", "MSI"):
+        return "pc/laptop"
+
+    # Generic webby device with unknown vendor → likely IoT
+    if (has("80/") or has("443/")) and ven == "Unknown":
+        return "iot"
+
     return "unknown"
 
-def enrich_identity(dev: dict) -> dict:
-    vendor = lookup_vendor(dev.get("mac",""))
-    category = classify_device(dev.get("hostname",""), vendor, dev.get("ports",[]))
-    return {**dev, "vendor": vendor, "category": category}
+def enrich_identity(dev: Dict) -> Dict:
+    d = dict(dev)
+    vendor = d.get("vendor", "Unknown")
+    d["category"] = classify_device(d.get("hostname", ""), vendor, d.get("ports", []) or [])
+    return d
