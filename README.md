@@ -1,3 +1,5 @@
+![CI](https://github.com/GregRPro1/NetworkHealthAssistant/actions/workflows/ci.yml/badge.svg)
+
 # Network Health Assistant — Full Package (Core + GUI)
 This package contains:
 - **Core scanner/analyzer** (no external deps): ARP scan, optional nmap enrichment, OUI/vendor lookup, heuristics, risk scoring, baseline/history, AI-ready payloads, JSON/Markdown reports.

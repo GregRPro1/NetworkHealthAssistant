@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: Build & Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache pip
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          python - <<'PY'
+          import sys, platform
+          print("Python:", sys.version)
+          print("Platform:", platform.platform())
+          PY
+        shell: bash
+
+      - name: Build PDF guide
+        run: python tools/build_userguide.py
+        shell: |
+          ${{ matrix.os == 'windows-latest' && 'pwsh' || 'bash' }}
+
+      - name: Run smoke tests
+        env:
+          PYTHONPATH: .
+        run: python -m tests.smoke_tests
+        shell: |
+          ${{ matrix.os == 'windows-latest' && 'pwsh' || 'bash' }}
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: NHA-artifacts-${{ runner.os }}
+          path: |
+            docs/UserGuide.pdf
+            data/report.json
+            data/app.log
+          if-no-files-found: ignore
