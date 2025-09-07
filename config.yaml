@@ -1,0 +1,24 @@
+network:
+  cidr: 192.168.1.0/24
+scanner:
+  use_nmap_if_available: true
+storage:
+  root: ./data
+
+
+health:
+  internet_hosts: ["1.1.1.1", "8.8.8.8"]   # ping to estimate WAN latency
+  lan_targets: ["192.168.1.1"]             # router IP or other LAN targets
+  printers:
+    - { name: "Office Printer", ip: "192.168.1.50" }
+  speedtest:
+    enabled: true
+    interval_min: 120
+    binary: "speedtest"        # Ookla 'speedtest' preferred; will also try 'speedtest-cli'
+  iperf3:
+    enabled: false
+    server: "192.168.1.2"      # run iperf3 -s on a LAN host if you want LAN throughput
+
+
+api:
+  token: "changeme-very-secret"   # set a strong token; if empty or omitted, API is open on LAN

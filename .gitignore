@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pkl
+*.egg-info/
+.venv/
+
+# Logs & temp
+data/
+*.log
+
+# Reports/Builds
+docs/UserGuide.pdf
+*.zip
+
+# IDE
+.vscode/
+.idea/
+*.swp
