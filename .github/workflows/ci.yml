@@ -39,24 +39,15 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          python - <<'PY'
-          import sys, platform
-          print("Python:", sys.version)
-          print("Platform:", platform.platform())
-          PY
-        shell: bash
+          python -c "import sys, platform; print('Python:', sys.version); print('Platform:', platform.platform())"
 
       - name: Build PDF guide
         run: python tools/build_userguide.py
-        shell: |
-          ${{ matrix.os == 'windows-latest' && 'pwsh' || 'bash' }}
 
       - name: Run smoke tests
         env:
           PYTHONPATH: .
         run: python -m tests.smoke_tests
-        shell: |
-          ${{ matrix.os == 'windows-latest' && 'pwsh' || 'bash' }}
 
       - name: Upload artifacts
         if: always()
