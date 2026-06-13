@@ -19,6 +19,29 @@ health:
     enabled: false
     server: "192.168.1.2"      # run iperf3 -s on a LAN host if you want LAN throughput
 
+wifi_survey:
+  output_dir: "R:/NetworkHealthAssistant/wifi_surveys"
+  nas_test_path: "R:/NetworkHealthAssistant/wifi_speed_tests"
+  nas_test_size_mb: 16
+  run_internet_speed_by_default: false
+  run_lan_iperf_by_default: false
+  run_nas_test_by_default: true
+
 
 api:
   token: "changeme-very-secret"   # set a strong token; if empty or omitted, API is open on LAN
+
+integrations:
+  deco:
+    enabled: true
+    host: 192.168.1.1     # gateway/controller; node IPs below are also probed
+    username: "admin"     # if required
+    password: "secret"    # if required
+    timeout: 2.0
+    verify_ssl: false     # local Deco HTTPS commonly uses a self-signed certificate
+    auto_import_on_scan: true
+    nodes:
+      - { name: "Study",   ip: "192.168.1.189", mac: "1c:3b:f3:55:02:39", bssids: ["1c:3b:f3:55:02:3b", "1c:3b:f3:55:02:3c", "22:3b:f3:55:02:3b", "22:3b:f3:55:02:3c", "26:3b:f3:55:02:3c"] }
+      - { name: "Bedroom", ip: "192.168.1.246", mac: "1c:3b:f3:54:fe:9c", bssids: ["1c:3b:f3:54:fe:9f", "22:3b:f3:54:fe:9e", "22:3b:f3:54:fe:9f", "26:3b:f3:54:fe:9f"] }
+      - { name: "Garage",  ip: "192.168.1.149", mac: "1c:3b:f3:48:6b:c0", bssids: ["1c:3b:f3:48:6b:c3", "22:3b:f3:48:6b:c3", "26:3b:f3:48:6b:c3", "22:3b:f3:48:6b:c2", "26:3b:f3:48:6b:c2"] }
+      - { name: "Garden",  ip: "192.168.1.216", mac: "50:3d:d1:a7:ed:54", bssids: ["50:3d:d1:a7:ed:56", "50:3d:d1:a7:ed:57", "56:3d:d1:a7:ed:56", "56:3d:d1:a7:ed:57"] }

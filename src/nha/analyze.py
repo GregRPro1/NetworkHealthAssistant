@@ -1,45 +1,112 @@
-from collections import defaultdict
-from .logger import get_logger
+# src/nha/analyze.py
+from __future__ import annotations
+from typing import Dict, List, Tuple, Any
+import ipaddress
 from .classify import enrich_identity
 
-RISK_RULES = {
-    "unknown_vendor": 3, "unknown_category": 2,
-    "camera_ports": 4, "many_open_ports": 2, "new_device": 3,
-}
+def _normalize_devices(seq: Any) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    if not seq:
+        return out
+    if isinstance(seq, dict):
+        if "devices" in seq and isinstance(seq["devices"], list):
+            return _normalize_devices(seq["devices"])
+        return [seq]
+    if not isinstance(seq, list):
+        return out
+    for item in seq:
+        if isinstance(item, dict):
+            out.append(item)
+        elif isinstance(item, str):
+            out.append({"ip": item})
+    return out
 
-def compute_risk(dev, is_new=False):
-    score, reasons = 0, []
-    if dev.get("vendor") == "Unknown":
-        score += RISK_RULES["unknown_vendor"]; reasons.append("unknown_vendor")
-    if dev.get("category","unknown").startswith("unknown"):
-        score += RISK_RULES["unknown_category"]; reasons.append("unknown_category")
-    ports = dev.get("ports", [])
+def _is_multicast_or_broadcast(ip: str) -> bool:
+    try:
+        ipobj = ipaddress.ip_address(ip)
+        return ipobj.is_multicast or ip.endswith(".255")
+    except Exception:
+        return False
+
+def _score_device(d: Dict[str, Any]) -> Tuple[int, List[str]]:
+    issues: List[str] = []
+    ports  = [str(p) for p in (d.get("ports") or [])]
+    vendor = d.get("vendor", "Unknown")
+    hostname = d.get("hostname","")
+    ip = d.get("ip","")
+
+    if _is_multicast_or_broadcast(ip):
+        return 1, ["System/multicast/broadcast address"]
+
+    risk = 1
+
+    # High
+    if any(p.startswith("23/") for p in ports):
+        risk = max(risk, 8); issues.append("Telnet (23/tcp) open")
+    if any(p.startswith("3389/") for p in ports):
+        risk = max(risk, 8); issues.append("RDP (3389/tcp) open")
+
+    # Medium
+    if any(p.startswith("445/") for p in ports):
+        risk = max(risk, 5); issues.append("SMB (445/tcp) open")
     if any(p.startswith("554/") for p in ports):
-        score += RISK_RULES["camera_ports"]; reasons.append("camera_ports")
-    if len(ports) >= 5:
-        score += RISK_RULES["many_open_ports"]; reasons.append("many_open_ports")
-    if is_new:
-        score += RISK_RULES["new_device"]; reasons.append("new_device")
-    return score, reasons
+        risk = max(risk, 5); issues.append("RTSP (554/tcp) open")
+    if any(p.startswith("9100/") or p.startswith("631/") for p in ports):
+        risk = max(risk, 5); issues.append("Printer service (9100/631) open")
 
-def analyze(current_devices, baseline_devices):
-    log = get_logger()
-    by_mac = {d.get("mac"): d for d in baseline_devices if d.get("mac")}
-    log.info(f'analyze: current={len(current_devices)} baseline={len(baseline_devices)}'); analyzed, new_count = [], 0
+    # Web-only + Unknown vendor => suspicious IoT
+    if (any(p.startswith("80/") or p.startswith("443/") for p in ports)
+        and vendor == "Unknown" and risk < 5):
+        risk = max(risk, 4); issues.append("Unknown vendor with web port(s)")
+
+    if vendor == "Unknown":
+        risk = max(risk, risk + 1); issues.append("Unknown vendor")
+    if not hostname:
+        risk = max(risk, risk + 1); issues.append("No hostname")
+
+    risk = max(1, min(risk, 10))
+    return risk, issues
+
+def analyze(current: Dict[str, Any], baseline: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    current_devices  = _normalize_devices(current.get("devices"))
+    baseline_devices = _normalize_devices(baseline.get("devices"))
+
+    known_keys = set()
+    for b in baseline_devices:
+        key = (b.get("mac") or b.get("ip"))
+        if key:
+            known_keys.add(key)
+
+    analyzed: List[Dict[str, Any]] = []
+    rbuckets = {"high": 0, "medium": 0, "low": 0}
+    new_count = 0
+
     for d in current_devices:
-        e = enrich_identity(d)
-        is_new = e.get("mac") not in by_mac
-        if is_new: new_count += 1
-        score, reasons = compute_risk(e, is_new=is_new)
-        e["risk_score"] = score; e["risk_reasons"] = reasons
-        analyzed.append(e)
+        # identity enrichment (hostname + category + hints)
+        dd = enrich_identity(d)
 
-    analyzed.sort(key=lambda x: x.get("risk_score", 0), reverse=True)
-    summary = {"total": len(analyzed), "new_devices": new_count, "by_category": defaultdict(int), "risk_buckets": {"high":0,"medium":0,"low":0}}
-    for a in analyzed:
-        summary["by_category"][a.get("category","unknown")] += 1
-        if a["risk_score"] >= 6: summary["risk_buckets"]["high"] += 1
-        elif a["risk_score"] >= 3: summary["risk_buckets"]["medium"] += 1
-        else: summary["risk_buckets"]["low"] += 1
-    summary["by_category"] = dict(summary["by_category"])
+        # risk + reasons
+        risk, issues = _score_device(dd)
+        dd["risk_score"] = risk
+        if issues:
+            dd["issues"] = list(set(issues + dd.get("issues", [])))  # merge & dedupe
+
+        if risk >= 7:
+            rbuckets["high"] += 1
+        elif risk >= 4:
+            rbuckets["medium"] += 1
+        else:
+            rbuckets["low"] += 1
+
+        key = (dd.get("mac") or dd.get("ip"))
+        if key and key not in known_keys:
+            new_count += 1
+
+        analyzed.append(dd)
+
+    summary = {
+        "total": len(analyzed),
+        "new_devices": new_count,
+        "risk_buckets": rbuckets,
+    }
     return analyzed, summary

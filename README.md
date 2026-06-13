@@ -69,6 +69,32 @@ health:
 - **Printers**: quick online check via common ports (9100/631).
 Status bar shows **WAN latency / speed** and **printer online/offline** summary.
 
+## Wi-Fi roaming survey
+Use the **Wi-Fi Survey** tab on the laptop while walking around the house, garden, and summer house.
+Each observation records:
+- current SSID, AP BSSID, mapped Deco node, band, channel, signal, RSSI, and link rates
+- all visible BSSIDs for the same SSID, mapped to Study/Bedroom/Garage/Garden when configured
+- internet latency, LAN/router latency, optional internet speed test
+- optional LAN `iperf3` throughput
+- optional NAS file read/write throughput
+
+Recommended workflow:
+1. Put the laptop in the target location.
+2. Enter a location name, e.g. `summer house`, `garden patio`, `kitchen`.
+3. Click **Capture Observation**.
+4. Move the Garden Deco node, wait 1-2 minutes for the mesh to settle, then capture again.
+
+If the laptop and desktop share a NAS mapped as `R:`, set:
+
+```yaml
+wifi_survey:
+  output_dir: "R:/NetworkHealthAssistant/wifi_surveys"
+  nas_test_path: "R:/NetworkHealthAssistant/wifi_speed_tests"
+  nas_test_size_mb: 16
+```
+
+The app writes one JSON file per observation plus `wifi_survey_history.jsonl`, so desktop and laptop captures can be compared from the shared NAS.
+
 
 ## Settings tab
 - Edit `config.yaml` directly inside the app.
